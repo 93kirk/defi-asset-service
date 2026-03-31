@@ -40,6 +40,8 @@ func (c *TestController) getRateFromContract(ctx context.Context, protocolID, un
 		return c.getLendingRate(ctx, client, contractAddr, protocolID, underlyingToken)
 	case "amm":
 		return c.getAMMRate(ctx, client, contractAddr, protocolID)
+	case "stablecoin_yield":
+		return c.getStablecoinYieldRate(ctx, client, contractAddr, protocolID)
 	default:
 		return 0, nil, fmt.Errorf("unsupported protocol type: %s", protocolInfo.protocolType)
 	}
@@ -315,6 +317,14 @@ func (c *TestController) getProtocolContractInfo(protocolID string) *protocolCon
 			underlying:   "交易对",
 			receipt:      "NFT",
 		},
+		"origin": {
+			protocolID:   "origin",
+			protocolType: "stablecoin_yield",
+			chain:        "eth",
+			contract:     "0x2A8e1E676Ec238d8A992307B495b45B3fEAa5e86", // OUSD
+			underlying:   "USD",
+			receipt:      "OUSD",
+		},
 	}
 	
 	// 精确匹配
@@ -404,6 +414,7 @@ func (c *TestController) getMockRateFromDebank(protocolID string) float64 {
 		"etherfi":     1.021,
 		"yearn":       1.08,
 		"curve":       1.005,
+		"origin":      1.03, // Origin协议：3%收益
 	}
 	
 	if rate, ok := rates[protocolID]; ok {
@@ -447,4 +458,28 @@ func (c *TestController) getMockChainlinkPrice(token string) *big.Int {
 		return price
 	}
 	
-	return big.NewInt(100000000) //
+	return big.NewInt(100000000) // $1.00
+}
+
+func (c *TestController) getStablecoinYieldRate(ctx context.Context, client *ethclient.Client, addr common.Address, protocolID string) (float64, map[string]interface{}, error) {
+	// 稳定币收益协议汇率计算
+	// Origin Protocol: OUSD算法稳定币
+	
+	var rate float64
+	switch protocolID {
+	case "origin":
+		// OUSD目标与美元1:1，加上收益
+		rate = 1.03 // 3% 收益
+	default:
+		rate = 1.02 // 默认2%收益
+	}
+	
+	return rate, map[string]interface{}{
+		"source":        "contract",
+		"method":        "stablecoin_yield_rate",
+		"protocol":      protocolID,
+		"contract":      addr.Hex(),
+		"exchange_rate": rate,
+		"note":          "稳定币汇率 + 收益",
+	}, nil
+}

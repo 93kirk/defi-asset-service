@@ -149,6 +149,18 @@ func (c *TestController) ListSupportedProtocols(w http.ResponseWriter, r *http.R
 			"receipt":     "eETH",
 			"description": "流动性质押+再质押",
 		},
+		
+		// Origin协议
+		{
+			"id":          "origin",
+			"name":        "Origin Protocol",
+			"type":        "stablecoin_yield",
+			"chain":       "eth",
+			"contract":    "0x2A8e1E676Ec238d8A992307B495b45B3fEAa5e86", // OUSD
+			"underlying":  "USD",
+			"receipt":     "OUSD",
+			"description": "算法稳定币+收益协议",
+		},
 	}
 	
 	render.JSON(w, r, map[string]interface{}{
