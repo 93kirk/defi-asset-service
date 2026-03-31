@@ -161,6 +161,18 @@ func (c *TestController) ListSupportedProtocols(w http.ResponseWriter, r *http.R
 			"receipt":     "OUSD",
 			"description": "算法稳定币+收益协议",
 		},
+		
+		// Sablier协议
+		{
+			"id":          "sablier",
+			"name":        "Sablier",
+			"type":        "streaming_payment",
+			"chain":       "eth",
+			"contract":    "0xCD18eAa163733Da39c232722cBC4E8940b1D8888", // Sablier V2
+			"underlying":  "多种代币",
+			"receipt":     "流支付权益",
+			"description": "实时流支付协议",
+		},
 	}
 	
 	render.JSON(w, r, map[string]interface{}{

@@ -42,6 +42,8 @@ func (c *TestController) getRateFromContract(ctx context.Context, protocolID, un
 		return c.getAMMRate(ctx, client, contractAddr, protocolID)
 	case "stablecoin_yield":
 		return c.getStablecoinYieldRate(ctx, client, contractAddr, protocolID)
+	case "streaming_payment":
+		return c.getStreamingPaymentRate(ctx, client, contractAddr, protocolID)
 	default:
 		return 0, nil, fmt.Errorf("unsupported protocol type: %s", protocolInfo.protocolType)
 	}
@@ -325,6 +327,14 @@ func (c *TestController) getProtocolContractInfo(protocolID string) *protocolCon
 			underlying:   "USD",
 			receipt:      "OUSD",
 		},
+		"sablier": {
+			protocolID:   "sablier",
+			protocolType: "streaming_payment",
+			chain:        "eth",
+			contract:     "0xCD18eAa163733Da39c232722cBC4E8940b1D8888", // Sablier V2
+			underlying:   "多种代币",
+			receipt:      "流支付权益",
+		},
 	}
 	
 	// 精确匹配
@@ -414,7 +424,8 @@ func (c *TestController) getMockRateFromDebank(protocolID string) float64 {
 		"etherfi":     1.021,
 		"yearn":       1.08,
 		"curve":       1.005,
-		"origin":      1.03, // Origin协议：3%收益
+		"origin":      1.03,  // Origin协议：3%收益
+		"sablier":     0.5,   // Sablier协议：50%完成度
 	}
 	
 	if rate, ok := rates[protocolID]; ok {
@@ -481,5 +492,30 @@ func (c *TestController) getStablecoinYieldRate(ctx context.Context, client *eth
 		"contract":      addr.Hex(),
 		"exchange_rate": rate,
 		"note":          "稳定币汇率 + 收益",
+	}, nil
+}
+
+func (c *TestController) getStreamingPaymentRate(ctx context.Context, client *ethclient.Client, addr common.Address, protocolID string) (float64, map[string]interface{}, error) {
+	// 流支付协议汇率计算
+	// Sablier: 实时流支付
+	
+	var rate float64
+	switch protocolID {
+	case "sablier":
+		// 流支付汇率：基于时间进度的价值
+		// 假设平均流支付完成50%
+		rate = 0.5
+	default:
+		rate = 0.5 // 默认50%完成度
+	}
+	
+	return rate, map[string]interface{}{
+		"source":        "contract",
+		"method":        "streaming_payment_rate",
+		"protocol":      protocolID,
+		"contract":      addr.Hex(),
+		"exchange_rate": rate,
+		"note":          "流支付完成比例 (0.0-1.0)",
+		"interpretation": "0.5表示流支付已完成50%",
 	}, nil
 }
