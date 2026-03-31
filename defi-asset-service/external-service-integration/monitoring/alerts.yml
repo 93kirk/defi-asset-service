@@ -1,0 +1,287 @@
+# DeFi资产展示服务 - 告警规则
+
+groups:
+  # 服务可用性告警
+  - name: service_availability
+    rules:
+      # 服务A不可用
+      - alert: ServiceADown
+        expr: up{job="service-a"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: service-a
+        annotations:
+          summary: "服务A不可用"
+          description: "服务A已经宕机超过1分钟"
+          runbook: "https://wiki.example.com/runbooks/service-a-down"
+          
+      # 服务B不可用
+      - alert: ServiceBDown
+        expr: up{job="service-b"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: service-b
+        annotations:
+          summary: "服务B不可用"
+          description: "服务B已经宕机超过1分钟"
+          runbook: "https://wiki.example.com/runbooks/service-b-down"
+          
+      # 应用服务不可用
+      - alert: ApplicationDown
+        expr: up{job="defi-external-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: defi-external-service
+        annotations:
+          summary: "应用服务不可用"
+          description: "DeFi资产展示服务已经宕机超过30秒"
+          runbook: "https://wiki.example.com/runbooks/application-down"
+
+  # 错误率告警
+  - name: error_rates
+    rules:
+      # 服务A错误率过高
+      - alert: ServiceAHighErrorRate
+        expr: |
+          rate(defi_service_a_errors_total[5m]) / 
+          rate(defi_service_a_requests_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          service: service-a
+        annotations:
+          summary: "服务A错误率过高"
+          description: "服务A的错误率超过1% (当前: {{ $value | humanizePercentage }})"
+          runbook: "https://wiki.example.com/runbooks/service-a-high-error-rate"
+          
+      # 服务B错误率过高
+      - alert: ServiceBHighErrorRate
+        expr: |
+          rate(defi_service_b_errors_total[5m]) / 
+          rate(defi_service_b_requests_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          service: service-b
+        annotations:
+          summary: "服务B错误率过高"
+          description: "服务B的错误率超过1% (当前: {{ $value | humanizePercentage }})"
+          runbook: "https://wiki.example.com/runbooks/service-b-high-error-rate"
+
+  # 响应时间告警
+  - name: response_times
+    rules:
+      # 服务A响应时间慢
+      - alert: ServiceASlowResponse
+        expr: |
+          histogram_quantile(0.95, rate(defi_service_a_response_time_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: service-a
+        annotations:
+          summary: "服务A响应时间慢"
+          description: "服务A的P95响应时间超过2秒 (当前: {{ $value }}秒)"
+          runbook: "https://wiki.example.com/runbooks/service-a-slow-response"
+          
+      # 服务B响应时间慢
+      - alert: ServiceBSlowResponse
+        expr: |
+          histogram_quantile(0.95, rate(defi_service_b_response_time_seconds_bucket[5m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: service-b
+        annotations:
+          summary: "服务B响应时间慢"
+          description: "服务B的P95响应时间超过3秒 (当前: {{ $value }}秒)"
+          runbook: "https://wiki.example.com/runbooks/service-b-slow-response"
+
+  # 熔断器告警
+  - name: circuit_breaker
+    rules:
+      # 服务A熔断器打开
+      - alert: ServiceACircuitBreakerOpen
+        expr: defi_circuit_breaker_state{service="service-a"} == 1
+        for: 30s
+        labels:
+          severity: critical
+          service: service-a
+        annotations:
+          summary: "服务A熔断器打开"
+          description: "服务A的熔断器已经打开超过30秒"
+          runbook: "https://wiki.example.com/runbooks/service-a-circuit-breaker-open"
+          
+      # 服务B熔断器打开
+      - alert: ServiceBCircuitBreakerOpen
+        expr: defi_circuit_breaker_state{service="service-b"} == 1
+        for: 30s
+        labels:
+          severity: critical
+          service: service-b
+        annotations:
+          summary: "服务B熔断器打开"
+          description: "服务B的熔断器已经打开超过30秒"
+          runbook: "https://wiki.example.com/runbooks/service-b-circuit-breaker-open"
+
+  # 限流器告警
+  - name: rate_limiter
+    rules:
+      # 服务A限流触发频繁
+      - alert: ServiceAHighRateLimit
+        expr: |
+          rate(defi_rate_limit_rejected_total{service="service-a"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: service-a
+        annotations:
+          summary: "服务A限流触发频繁"
+          description: "服务A的限流器在5分钟内拒绝了超过10个请求"
+          runbook: "https://wiki.example.com/runbooks/service-a-high-rate-limit"
+          
+      # 服务B限流触发频繁
+      - alert: ServiceBHighRateLimit
+        expr: |
+          rate(defi_rate_limit_rejected_total{service="service-b"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: service-b
+        annotations:
+          summary: "服务B限流触发频繁"
+          description: "服务B的限流器在5分钟内拒绝了超过5个请求"
+          runbook: "https://wiki.example.com/runbooks/service-b-high-rate-limit"
+
+  # 缓存告警
+  - name: cache
+    rules:
+      # 缓存命中率低
+      - alert: LowCacheHitRate
+        expr: |
+          rate(defi_cache_hits_total[5m]) / 
+          (rate(defi_cache_hits_total[5m]) + rate(defi_cache_misses_total[5m])) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "缓存命中率低"
+          description: "缓存命中率低于80% (当前: {{ $value | humanizePercentage }})"
+          runbook: "https://wiki.example.com/runbooks/low-cache-hit-rate"
+          
+      # Redis内存使用率高
+      - alert: RedisHighMemoryUsage
+        expr: |
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis内存使用率高"
+          description: "Redis内存使用率超过80% (当前: {{ $value | humanizePercentage }})"
+          runbook: "https://wiki.example.com/runbooks/redis-high-memory-usage"
+
+  # 数据库告警
+  - name: database
+    rules:
+      # MySQL连接数高
+      - alert: MySQLHighConnections
+        expr: |
+          mysql_global_status_threads_connected / 
+          mysql_global_variables_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "MySQL连接数高"
+          description: "MySQL连接数超过最大连接数的80% (当前: {{ $value | humanizePercentage }})"
+          runbook: "https://wiki.example.com/runbooks/mysql-high-connections"
+          
+      # MySQL慢查询多
+      - alert: MySQLManySlowQueries
+        expr: |
+          rate(mysql_global_status_slow_queries[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "MySQL慢查询多"
+          description: "MySQL在5分钟内产生了超过10个慢查询"
+          runbook: "https://wiki.example.com/runbooks/mysql-many-slow-queries"
+
+  # 基础设施告警
+  - name: infrastructure
+    rules:
+      # 高CPU使用率
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "高CPU使用率"
+          description: "CPU使用率超过80% (当前: {{ $value }}%)"
+          runbook: "https://wiki.example.com/runbooks/high-cpu-usage"
+          
+      # 高内存使用率
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 
+          node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "高内存使用率"
+          description: "内存使用率超过80% (当前: {{ $value }}%)"
+          runbook: "https://wiki.example.com/runbooks/high-memory-usage"
+          
+      # 磁盘空间不足
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / 
+          node_filesystem_size_bytes{mountpoint="/"} * 100) < 20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "磁盘空间不足"
+          description: "根分区剩余空间不足20% (当前: {{ $value }}%)"
+          runbook: "https://wiki.example.com/runbooks/low-disk-space"
+
+  # 业务指标告警
+  - name: business_metrics
+    rules:
+      # 请求量突降
+      - alert: RequestVolumeDrop
+        expr: |
+          rate(defi_requests_total[10m]) < 
+          rate(defi_requests_total[40m:10m]) * 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "请求量突降"
+          description: "请求量相比40分钟前下降了50%以上"
+          runbook: "https://wiki.example.com/runbooks/request-volume-drop"
+          
+      # 用户活跃度下降
+      - alert: UserActivityDrop
+        expr: |
+          rate(defi_active_users_total[1h]) < 
+          rate(defi_active_users_total[6h:1h]) * 0.7
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "用户活跃度下降"
+          description: "用户活跃度相比6小时前下降了30%以上"
+          runbook: "https://wiki.example.com/runbooks/user-activity-drop"

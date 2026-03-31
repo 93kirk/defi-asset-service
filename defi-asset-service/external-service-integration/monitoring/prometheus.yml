@@ -1,0 +1,89 @@
+# Prometheus配置 - DeFi资产展示服务监控
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'production'
+    cluster: 'defi-asset-service'
+
+# 告警规则文件
+rule_files:
+  - "alerts.yml"
+
+# 抓取配置
+scrape_configs:
+  # 应用指标
+  - job_name: 'defi-external-service'
+    static_configs:
+      - targets: ['app:8080']
+        labels:
+          service: 'defi-external-service'
+          component: 'application'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # 服务A监控
+  - job_name: 'service-a'
+    static_configs:
+      - targets: ['service-a-exporter:9115']
+        labels:
+          service: 'service-a'
+          component: 'external-service'
+    scrape_interval: 30s
+
+  # 服务B监控
+  - job_name: 'service-b'
+    static_configs:
+      - targets: ['service-b-exporter:9116']
+        labels:
+          service: 'service-b'
+          component: 'external-service'
+    scrape_interval: 30s
+
+  # MySQL监控
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+        labels:
+          service: 'mysql'
+          component: 'database'
+    scrape_interval: 30s
+
+  # Redis监控
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          component: 'cache'
+    scrape_interval: 30s
+
+  # 节点监控
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node'
+          component: 'infrastructure'
+    scrape_interval: 30s
+
+  # Prometheus自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+# 远程写入配置（可选）
+remote_write:
+  - url: "http://thanos-receive:10908/api/v1/receive"
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'up|process_.*'
+        action: keep
+
+# 远程读取配置（可选）
+remote_read:
+  - url: "http://thanos-query:10902/api/v1/read"
+    read_recent: true

@@ -1,0 +1,405 @@
+name: DeFi Asset Service CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'scripts/**'
+      - 'config/**'
+      - 'tests/**'
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scans weekly
+    - cron: '0 2 * * 1'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: '1.21'
+  DOCKER_COMPOSE_VERSION: '2.20.0'
+
+jobs:
+  # Lint and format code
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run gofmt
+        run: |
+          gofmt -d .
+          if [ $(gofmt -l . | wc -l) -gt 0 ]; then
+            echo "Code is not formatted properly. Run 'gofmt -w .'"
+            exit 1
+          fi
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: Run staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
+
+  # Run unit tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run unit tests
+        run: |
+          go test ./tests/unit/... -v -coverprofile=coverage.out -covermode=atomic
+          go tool cover -func=coverage.out
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
+          flags: unittests
+
+  # Run integration tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: defi_asset_test
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+        ports:
+          - 3306:3306
+      redis:
+        image: redis:7.0-alpine
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run integration tests
+        run: |
+          go test ./tests/integration/... -v -tags=integration
+        env:
+          MYSQL_HOST: localhost
+          MYSQL_PORT: 3306
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: defi_asset_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+  # Run API tests
+  api-tests:
+    name: API Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run API tests
+        run: |
+          go test ./tests/api/... -v
+
+  # Build Docker images
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: api-tests
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-,format=short
+
+      - name: Build and push API Gateway image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Queue Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.worker
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}-worker
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Gosec security checker
+        uses: securego/gosec@master
+        with:
+          args: '-fmt sarif -out gosec-results.sarif ./...'
+
+      - name: Upload Gosec scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'gosec-results.sarif'
+
+  # Deploy to development environment
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/develop'
+    environment: development
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to development
+        run: |
+          chmod +x ./scripts/deploy.sh
+          ./scripts/deploy.sh --build --migrate --test
+        env:
+          ENVIRONMENT: development
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD_DEV }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD_DEV }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET_DEV }}
+
+      - name: Run smoke tests
+        run: |
+          sleep 30
+          curl -f http://localhost:8080/health || exit 1
+          curl -f -H "X-API-Key: test-key" http://localhost:8080/v1/health || exit 1
+
+  # Deploy to staging environment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 --decode > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f k8s/staging/
+          kubectl rollout status deployment/defi-api-gateway -n defi-staging --timeout=300s
+          kubectl rollout status deployment/defi-queue-worker -n defi-staging --timeout=300s
+
+      - name: Run staging tests
+        run: |
+          sleep 60
+          STAGING_URL=${{ secrets.STAGING_URL }}
+          curl -f $STAGING_URL/health || exit 1
+          curl -f -H "X-API-Key: ${{ secrets.STAGING_API_KEY }}" $STAGING_URL/v1/health || exit 1
+
+  # Deploy to production environment
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 --decode > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to production (blue-green)
+        run: |
+          # Deploy new version
+          kubectl apply -f k8s/production/
+          
+          # Wait for new deployment to be ready
+          kubectl rollout status deployment/defi-api-gateway-v2 -n defi-production --timeout=300s
+          
+          # Switch traffic to new version
+          kubectl apply -f k8s/production/ingress-v2.yaml
+          
+          # Wait for old deployment to drain
+          sleep 60
+          
+          # Scale down old version
+          kubectl scale deployment defi-api-gateway-v1 --replicas=0 -n defi-production
+
+      - name: Verify production deployment
+        run: |
+          sleep 30
+          PROD_URL=${{ secrets.PROD_URL }}
+          curl -f $PROD_URL/health || exit 1
+          curl -f -H "X-API-Key: ${{ secrets.PROD_API_KEY }}" $PROD_URL/v1/health || exit 1
+
+  # Performance testing
+  performance:
+    name: Performance Test
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run k6 performance tests
+        uses: grafana/k6-action@v0.3.0
+        with:
+          filename: tests/performance/load-test.js
+          flags: --out json=test-results.json --duration 5m --vus 100
+        env:
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+          API_URL: ${{ secrets.STAGING_URL }}
+          API_KEY: ${{ secrets.STAGING_API_KEY }}
+
+      - name: Upload performance test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: test-results.json
+
+  # Notifications
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#defi-deployments'
+          username: 'DeFi CI/CD Bot'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Create deployment summary
+        if: ${{ job.status == 'success' }}
+        run: |
+          echo "Deployment Summary" >> summary.md
+          echo "==================" >> summary.md
+          echo "" >> summary.md
+          echo "**Environment:** ${{ github.ref_name }}" >> summary.md
+          echo "**Commit:** ${{ github.sha }}" >> summary.md
+          echo "**Author:** ${{ github.actor }}" >> summary.md
+          echo "**Time:** $(date)" >> summary.md
+          echo "" >> summary.md
+          echo "All checks passed successfully!" >> summary.md
+
+      - name: Upload deployment summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-summary
+          path: summary.md

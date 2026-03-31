@@ -1,0 +1,61 @@
+# 备份目录
+backup_btc_system_*/
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+__pycache__/
+*.pyc
+
+# 系统文件
+.system_check.log
+crontab_backup_*.txt
+
+# 个人配置
+.openclaw/
+.clawhub/
+
+# 大文件
+*.tar.gz
+*.zip
+
+# 测试文件
+test_*.sh
+test_*.log
+
+# 备份的BTC文件
+BTC_*.md
+btc-*/
+
+# 学习日志
+learning_*.log
+
+# 触发文件
+cron_triggers/
+triggers/
+
+# 内存文件（包含敏感信息）
+memory/
+
+# 技能目录
+skills/
+
+# 项目目录
+projects/
+
+# 报告目录
+reports/
+crypto-reports/
+
+# 比特币分析
+bitcoin-analysis/
+integrated-btc-analysis/
+btc-learning/
+
+# 临时脚本
+*_test.sh
+*_test.log

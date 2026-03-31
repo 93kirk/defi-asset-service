@@ -1,0 +1,98 @@
+# Prometheus configuration for DeFi Asset Service
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: '${ENVIRONMENT:-development}'
+    cluster: 'defi-asset-service'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # DeFi Asset Service API Gateway
+  - job_name: 'defi-api-gateway'
+    static_configs:
+      - targets: ['api-gateway:9091']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '(.*):\d+'
+        replacement: '${1}'
+
+  # Node Exporter (if deployed)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+  # MySQL Exporter
+  - job_name: 'mysql-exporter'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+    params:
+      collect[]:
+        - global_status
+        - global_variables
+        - slave_status
+        - info_schema.innodb_metrics
+        - info_schema.processlist
+        - info_schema.tables
+        - info_schema.userstats
+        - perf_schema.eventswaits
+        - perf_schema.file_events
+
+  # Redis Exporter
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    params:
+      check-keys: ['defi:*']
+
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+
+  # Blackbox exporter for external service monitoring
+  - job_name: 'blackbox-external-services'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://api-gateway:8080/health
+        - http://external-service-a:8081/health
+        - http://external-service-b:8082/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Pushgateway for batch jobs
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']

@@ -1,0 +1,143 @@
+# DeFi资产展示服务配置
+
+# 服务配置
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release" # debug, release, test
+  read_timeout: 30
+  write_timeout: 30
+  max_connections: 1000
+
+# 数据库配置
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    user: "defi_user"
+    password: "defi_password"
+    dbname: "defi_asset_service"
+    charset: "utf8mb4"
+    parse_time: true
+    max_idle_conns: 10
+    max_open_conns: 100
+    conn_max_lifetime: 300
+    conn_max_idle_time: 60
+
+# Redis配置
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 100
+  min_idle_conns: 10
+  max_retries: 3
+  dial_timeout: 5
+  read_timeout: 3
+  write_timeout: 3
+  pool_timeout: 4
+
+# 缓存配置
+cache:
+  position_ttl: 600 # 仓位缓存TTL（秒）
+  protocol_ttl: 3600 # 协议缓存TTL（秒）
+  price_ttl: 300 # 价格缓存TTL（秒）
+  apy_ttl: 600 # APY缓存TTL（秒）
+  empty_ttl: 60 # 空值缓存TTL（秒）
+
+# 外部服务配置
+external:
+  service_a:
+    base_url: "https://api.service-a.com/v1"
+    api_key: ""
+    timeout: 10
+    max_retries: 3
+    retry_delay: 1
+  
+  service_b:
+    base_url: "https://api.service-b.com/v1"
+    api_key: ""
+    timeout: 10
+    max_retries: 3
+    retry_delay: 1
+  
+  debank:
+    base_url: "https://openapi.debank.com/v1"
+    api_key: ""
+    timeout: 30
+    max_retries: 3
+    retry_delay: 2
+
+# 队列配置
+queue:
+  position_updates:
+    stream_name: "defi:stream:position_updates"
+    consumer_group: "position_workers"
+    consumer_name: "worker_1"
+    batch_size: 10
+    block_time: 5000
+    max_retries: 3
+    retry_delay: 5
+  
+  delayed_tasks:
+    zset_name: "defi:zset:delayed_tasks"
+    poll_interval: 1
+
+# 认证配置
+auth:
+  jwt_secret: "your-jwt-secret-key-here-change-in-production"
+  api_key_header: "X-API-Key"
+  jwt_expire_hours: 24
+  rate_limit_per_minute: 60
+  rate_limit_per_hour: 1000
+
+# 监控配置
+monitoring:
+  prometheus:
+    enabled: true
+    path: "/metrics"
+  
+  health_check:
+    enabled: true
+    path: "/health"
+  
+  request_logging:
+    enabled: true
+    level: "info"
+
+# 日志配置
+log:
+  level: "info" # debug, info, warn, error
+  format: "json" # json, text
+  output: "stdout" # stdout, file
+  file_path: "./logs/app.log"
+  max_size: 100 # MB
+  max_backups: 10
+  max_age: 30 # days
+
+# 定时任务配置
+cron:
+  sync_protocols:
+    enabled: true
+    schedule: "0 2 * * *" # 每天凌晨2点
+    batch_size: 50
+  
+  cleanup_cache:
+    enabled: true
+    schedule: "0 */6 * * *" # 每6小时
+    max_age_hours: 24
+  
+  update_prices:
+    enabled: true
+    schedule: "*/5 * * * *" # 每5分钟
+    batch_size: 100
+
+# 业务配置
+business:
+  default_chain_id: 1
+  supported_chains: [1, 56, 137, 42161, 10]
+  max_batch_addresses: 50
+  position_refresh_threshold: 0.05 # 仓位价值变化超过5%时刷新
+  fallback_enabled: true
+  fallback_data_ttl: 3600

@@ -1,0 +1,39 @@
+# DeFi资产展示服务 - Redis队列系统配置
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 3
+  pool_size: 100
+
+queue:
+  # 主队列配置
+  stream_name: "defi:stream:position_updates"
+  consumer_group: "position_workers"
+  consumer_name: "worker"
+  
+  # 死信队列配置
+  dlq_stream_name: "defi:stream:dlq:position_updates"
+  max_retries: 3
+  retry_delay: "30s"
+  
+  # 消费者配置
+  batch_size: 10
+  block_timeout: "5s"
+  auto_ack: false
+  
+  # 监控配置
+  metrics_enabled: true
+  health_check_interval: "30s"
+
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: ""
+  database: "defi_asset_service"
+  charset: "utf8mb4"
+
+# 应用配置
+log_level: "info"
+workers: 5

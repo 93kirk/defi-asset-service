@@ -1,0 +1,225 @@
+# DeFi资产展示服务 - 数据同步系统配置
+# 版本: v1.0
+
+# 应用配置
+app:
+  name: "defi-data-sync"
+  version: "1.0.0"
+  environment: "development"  # development, staging, production
+  debug: true
+
+# 服务器配置
+server:
+  http_port: 8080
+  grpc_port: 9090
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 60s
+
+# 数据库配置
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    username: "root"
+    password: "password"
+    database: "defi_asset_service"
+    charset: "utf8mb4"
+    parse_time: true
+    max_open_conns: 100
+    max_idle_conns: 20
+    conn_max_lifetime: 300s
+    conn_max_idle_time: 60s
+
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+    db: 0
+    pool_size: 100
+    min_idle_conns: 10
+    dial_timeout: 5s
+    read_timeout: 3s
+    write_timeout: 3s
+    pool_timeout: 4s
+
+# 外部服务配置
+external:
+  # DeBank网页抓取配置
+  debank:
+    base_url: "https://debank.com"
+    timeout: 30s
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    max_retries: 3
+    retry_delay: 2s
+    rate_limit: 10  # 每秒请求数限制
+
+  # 服务A配置（有balance概念的协议）
+  service_a:
+    base_url: "https://api.service-a.com"
+    api_key: ""
+    timeout: 10s
+    max_retries: 2
+
+  # 服务B配置（无balance概念的协议）
+  service_b:
+    base_url: "https://api.service-b.com"
+    api_key: ""
+    timeout: 10s
+    max_retries: 2
+
+# 同步任务配置
+sync:
+  # 协议元数据同步
+  protocol_metadata:
+    enabled: true
+    schedule: "0 2 * * *"  # 每天凌晨2点
+    full_sync_days: 7  # 每7天执行一次全量同步
+    batch_size: 50
+    concurrency: 5
+    timeout: 300s
+
+  # 协议代币同步
+  protocol_tokens:
+    enabled: true
+    schedule: "0 3 * * *"  # 每天凌晨3点
+    batch_size: 100
+    concurrency: 3
+    timeout: 600s
+
+  # 用户仓位同步
+  user_positions:
+    enabled: true
+    schedule: "*/10 * * * *"  # 每10分钟
+    batch_size: 1000
+    concurrency: 10
+    timeout: 180s
+
+  # 增量同步配置
+  incremental:
+    enabled: true
+    check_interval: "5m"  # 检查间隔
+    max_backoff: "1h"  # 最大退避时间
+    retry_count: 3
+
+# 缓存配置
+cache:
+  # Redis缓存配置
+  redis:
+    default_ttl: 600s  # 默认10分钟
+    position_ttl: 300s  # 仓位数据5分钟
+    protocol_ttl: 3600s  # 协议数据1小时
+    token_ttl: 1800s  # 代币数据30分钟
+
+  # 内存缓存配置
+  memory:
+    enabled: true
+    default_size: 10000
+    cleanup_interval: "1m"
+
+# 队列配置
+queue:
+  redis_stream:
+    enabled: true
+    stream_name: "defi:updates"
+    consumer_group: "defi-workers"
+    consumer_name: "worker-1"
+    max_len: 10000
+    block_timeout: "5s"
+    claim_min_idle: "30s"
+
+  # 死信队列配置
+  dead_letter:
+    enabled: true
+    stream_name: "defi:dead-letter"
+    max_retries: 3
+    retry_delay: "5m"
+
+# 日志配置
+log:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json, text
+  output: "stdout"  # stdout, file
+  file_path: "./logs/data-sync.log"
+  max_size: 100  # MB
+  max_backups: 10
+  max_age: 30  # days
+  compress: true
+
+# 监控配置
+monitoring:
+  # Prometheus指标
+  prometheus:
+    enabled: true
+    path: "/metrics"
+    port: 9091
+
+  # 健康检查
+  health_check:
+    enabled: true
+    path: "/health"
+    interval: "30s"
+
+  # 性能追踪
+  tracing:
+    enabled: false
+    jaeger_endpoint: "http://localhost:14268/api/traces"
+    sample_rate: 0.1
+
+# 告警配置
+alert:
+  # 错误率告警
+  error_rate:
+    enabled: true
+    threshold: 0.01  # 1%
+    window: "5m"
+    cooldown: "10m"
+
+  # 同步延迟告警
+  sync_latency:
+    enabled: true
+    threshold: "5m"  # 5分钟
+    window: "10m"
+
+  # 队列积压告警
+  queue_backlog:
+    enabled: true
+    threshold: 1000
+    window: "1m"
+
+# 安全配置
+security:
+  # API认证
+  api_auth:
+    enabled: true
+    api_keys:
+      - "default-key-123456"
+    header_name: "X-API-Key"
+
+  # 请求限制
+  rate_limit:
+    enabled: true
+    requests_per_second: 100
+    burst_size: 50
+
+  # CORS配置
+  cors:
+    enabled: true
+    allowed_origins:
+      - "*"
+    allowed_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+    allowed_headers:
+      - "Content-Type"
+      - "Authorization"
+      - "X-API-Key"
+
+# 开发配置
+development:
+  mock_external_apis: false
+  skip_auth: false
+  log_sql: false
+  seed_data: true

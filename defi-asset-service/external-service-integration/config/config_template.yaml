@@ -1,0 +1,362 @@
+# DeFi资产展示服务 - 外部服务集成配置模板
+# 版本: v1.0
+# 最后更新: 2026-03-30
+
+# 服务A配置（有balance概念的协议资产实时查询）
+service_a:
+  # 基础配置
+  base_url: "https://api.service-a.com/v1"
+  api_key: "${SERVICE_A_API_KEY}"  # 从环境变量读取
+  timeout: "10s"  # 请求超时时间
+  max_concurrency: 10  # 最大并发连接数
+  
+  # 重试配置
+  retry_config:
+    max_attempts: 3  # 最大重试次数
+    initial_delay: "100ms"  # 初始延迟
+    max_delay: "10s"  # 最大延迟
+    multiplier: 2.0  # 延迟倍数
+    jitter: 0.1  # 抖动系数
+    retryable_status_codes:  # 可重试的HTTP状态码
+      - 408  # Request Timeout
+      - 429  # Too Many Requests
+      - 500  # Internal Server Error
+      - 502  # Bad Gateway
+      - 503  # Service Unavailable
+      - 504  # Gateway Timeout
+  
+  # 限流配置
+  rate_limit_config:
+    requests_per_second: 10.0  # 每秒请求数
+    burst: 20  # 突发请求数
+    window: "1s"  # 时间窗口
+    max_queue_size: 100  # 最大队列大小
+    max_wait_time: "5s"  # 最大等待时间
+  
+  # 熔断器配置
+  circuit_breaker_config:
+    failure_threshold: 5  # 失败阈值
+    failure_window: "10s"  # 失败时间窗口
+    half_open_max_requests: 3  # 半开状态最大请求数
+    half_open_success_threshold: 2  # 半开状态成功阈值
+    open_state_timeout: "30s"  # 打开状态超时时间
+    reset_timeout: "60s"  # 重置超时时间
+    monitor_window: "60s"  # 监控窗口
+    min_requests: 10  # 最小请求数
+
+# 服务B配置（无balance概念的协议仓位数据查询）
+service_b:
+  # 基础配置
+  base_url: "https://api.service-b.com/v1"
+  api_key: "${SERVICE_B_API_KEY}"  # 从环境变量读取
+  timeout: "15s"  # 请求超时时间
+  max_concurrency: 5  # 最大并发连接数
+  
+  # 缓存配置
+  cache_ttl: "10m"  # 缓存TTL（10分钟）
+  cache_prefix: "defi:position"  # 缓存键前缀
+  
+  # 重试配置
+  retry_config:
+    max_attempts: 3
+    initial_delay: "100ms"
+    max_delay: "10s"
+    multiplier: 2.0
+    jitter: 0.1
+    retryable_status_codes:
+      - 408
+      - 429
+      - 500
+      - 502
+      - 503
+      - 504
+  
+  # 限流配置
+  rate_limit_config:
+    requests_per_second: 5.0  # 服务B通常有更严格的限流
+    burst: 10
+    window: "1s"
+    max_queue_size: 50
+    max_wait_time: "10s"
+  
+  # 熔断器配置
+  circuit_breaker_config:
+    failure_threshold: 3  # 服务B对失败更敏感
+    failure_window: "30s"
+    half_open_max_requests: 2
+    half_open_success_threshold: 2
+    open_state_timeout: "60s"  # 更长的打开状态超时
+    reset_timeout: "120s"
+    monitor_window: "120s"
+    min_requests: 5
+
+# HTTP客户端通用配置
+http_client:
+  base_url: ""  # 由具体服务配置覆盖
+  timeout: "30s"
+  max_idle_conns: 100
+  max_idle_conns_per_host: 10
+  max_conns_per_host: 50
+  idle_conn_timeout: "90s"
+  tls_handshake_timeout: "10s"
+  expect_continue_timeout: "1s"
+  disable_keep_alives: false
+  disable_compression: false
+  insecure_skip_verify: false  # 生产环境应为false
+
+# 数据库配置
+database:
+  # MySQL配置
+  mysql:
+    host: "${DB_HOST:localhost}"
+    port: "${DB_PORT:3306}"
+    username: "${DB_USERNAME:root}"
+    password: "${DB_PASSWORD}"
+    database: "${DB_NAME:defi_asset_service}"
+    max_open_conns: 100
+    max_idle_conns: 20
+    conn_max_lifetime: "300s"
+    conn_max_idle_time: "60s"
+    charset: "utf8mb4"
+    parse_time: true
+    loc: "Local"
+  
+  # Redis配置
+  redis:
+    host: "${REDIS_HOST:localhost}"
+    port: "${REDIS_PORT:6379}"
+    password: "${REDIS_PASSWORD}"
+    database: 0  # 默认数据库
+    max_retries: 3
+    min_retry_backoff: "8ms"
+    max_retry_backoff: "512ms"
+    dial_timeout: "5s"
+    read_timeout: "3s"
+    write_timeout: "3s"
+    pool_size: 100
+    min_idle_conns: 10
+    max_conn_age: "0s"  # 0表示不限制
+    pool_timeout: "4s"
+    idle_timeout: "300s"
+    idle_check_frequency: "60s"
+
+# 监控配置
+monitoring:
+  # 指标收集
+  metrics:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+    namespace: "defi_asset_service"
+    subsystem: "external_services"
+  
+  # 日志配置
+  logging:
+    level: "info"  # debug, info, warn, error
+    format: "json"  # json, console
+    output: "stdout"  # stdout, file
+    file_path: "/var/log/defi-asset-service.log"
+    max_size: 100  # MB
+    max_backups: 10
+    max_age: 30  # days
+    compress: true
+  
+  # 追踪配置
+  tracing:
+    enabled: false
+    service_name: "defi-asset-service"
+    exporter: "jaeger"  # jaeger, zipkin, otlp
+    endpoint: "localhost:6831"
+    sampler_type: "const"
+    sampler_param: 1.0
+  
+  # 健康检查
+  health_check:
+    enabled: true
+    port: 8081
+    path: "/health"
+    interval: "30s"
+    timeout: "5s"
+
+# 队列配置（用于服务B的实时更新）
+queue:
+  # Redis Streams配置
+  redis_streams:
+    enabled: true
+    stream_name: "defi:stream:position_updates"
+    consumer_group: "position_workers"
+    consumer_name: "worker_${HOSTNAME}"
+    max_len: 10000  # 最大消息长度
+    block_timeout: "5s"  # 阻塞超时时间
+    claim_min_idle_time: "30s"  # 最小空闲时间
+    claim_max_retries: 3  # 最大重试次数
+    
+  # 死信队列配置
+  dead_letter_queue:
+    enabled: true
+    stream_name: "defi:stream:dlq:position_updates"
+    max_retries: 3
+    retry_delay: "1m"
+    
+  # 延迟队列配置
+  delayed_queue:
+    enabled: true
+    zset_name: "defi:zset:delayed_tasks"
+    poll_interval: "1s"
+
+# 安全配置
+security:
+  # API密钥管理
+  api_keys:
+    rotation_enabled: true
+    rotation_interval: "30d"
+    max_keys_per_service: 3
+    
+  # 请求签名
+  request_signing:
+    enabled: true
+    algorithm: "hmac-sha256"
+    header_name: "X-Signature"
+    timestamp_header: "X-Timestamp"
+    timestamp_tolerance: "5m"
+    
+  # 数据加密
+  encryption:
+    enabled: true
+    algorithm: "aes-256-gcm"
+    key_rotation_interval: "90d"
+
+# 性能优化配置
+performance:
+  # 连接池优化
+  connection_pool:
+    http_max_idle_conns: 100
+    http_max_idle_conns_per_host: 10
+    db_max_open_conns: 100
+    db_max_idle_conns: 20
+    redis_pool_size: 100
+    redis_min_idle_conns: 10
+    
+  # 缓存优化
+  cache:
+    multi_level_enabled: true
+    memory_cache_size: 1000  # 内存缓存条目数
+    memory_cache_ttl: "1m"
+    redis_cache_ttl: "10m"
+    cache_preheat_enabled: true
+    preheat_batch_size: 100
+    preheat_interval: "5m"
+    
+  # 查询优化
+  query:
+    batch_size: 50
+    parallel_queries: 5
+    timeout: "10s"
+    max_retries: 2
+
+# 告警配置
+alerts:
+  # 服务可用性告警
+  availability:
+    enabled: true
+    threshold: 0.99  # 99%可用性
+    window: "5m"
+    cooldown: "10m"
+    
+  # 错误率告警
+  error_rate:
+    enabled: true
+    threshold: 0.01  # 1%错误率
+    window: "5m"
+    min_requests: 100
+    
+  # 响应时间告警
+  response_time:
+    enabled: true
+    p95_threshold: "2s"
+    p99_threshold: "5s"
+    window: "5m"
+    
+  # 队列积压告警
+  queue_backlog:
+    enabled: true
+    threshold: 1000
+    window: "1m"
+
+# 环境特定配置
+environments:
+  # 开发环境
+  development:
+    service_a:
+      base_url: "https://api.dev.service-a.com/v1"
+      timeout: "30s"
+    service_b:
+      base_url: "https://api.dev.service-b.com/v1"
+      timeout: "30s"
+    database:
+      mysql:
+        host: "localhost"
+      redis:
+        host: "localhost"
+    monitoring:
+      logging:
+        level: "debug"
+        
+  # 测试环境
+  testing:
+    service_a:
+      base_url: "https://api.test.service-a.com/v1"
+    service_b:
+      base_url: "https://api.test.service-b.com/v1"
+    monitoring:
+      logging:
+        level: "info"
+        
+  # 生产环境
+  production:
+    service_a:
+      base_url: "https://api.service-a.com/v1"
+    service_b:
+      base_url: "https://api.service-b.com/v1"
+    security:
+      request_signing:
+        enabled: true
+      encryption:
+        enabled: true
+    monitoring:
+      logging:
+        level: "warn"
+      tracing:
+        enabled: true
+
+# 功能开关
+feature_flags:
+  # 服务A功能
+  service_a:
+    batch_queries_enabled: true
+    real_time_updates_enabled: true
+    health_check_enabled: true
+    
+  # 服务B功能
+  service_b:
+    caching_enabled: true
+    database_persistence_enabled: true
+    queue_processing_enabled: true
+    fallback_to_database_enabled: true
+    
+  # 通用功能
+  common:
+    rate_limiting_enabled: true
+    circuit_breaker_enabled: true
+    retry_mechanism_enabled: true
+    monitoring_enabled: true
+    logging_enabled: true
+
+# 版本信息
+version:
+  major: 1
+  minor: 0
+  patch: 0
+  build_date: "2026-03-30"
+  git_commit: "${GIT_COMMIT}"
+  git_branch: "${GIT_BRANCH}"

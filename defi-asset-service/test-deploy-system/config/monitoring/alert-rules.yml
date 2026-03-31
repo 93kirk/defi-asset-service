@@ -1,0 +1,265 @@
+# Alerting rules for DeFi Asset Service
+groups:
+  - name: defi-asset-service
+    rules:
+      # API Gateway alerts
+      - alert: APIGatewayDown
+        expr: up{job="defi-api-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api-gateway
+        annotations:
+          summary: "API Gateway is down"
+          description: "API Gateway instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighAPIErrorRate
+        expr: rate(http_requests_total{job="defi-api-gateway", status=~"5.."}[5m]) / rate(http_requests_total{job="defi-api-gateway"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value }}% for instance {{ $labels.instance }}"
+
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="defi-api-gateway"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is {{ $value }}s for instance {{ $labels.instance }}"
+
+      - alert: LowAPIRequestRate
+        expr: rate(http_requests_total{job="defi-api-gateway"}[10m]) < 10
+        for: 15m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "Low API request rate"
+          description: "Request rate is {{ $value }} requests/second for instance {{ $labels.instance }}"
+
+      # Database alerts
+      - alert: MySQLDown
+        expr: up{job="mysql-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mysql
+        annotations:
+          summary: "MySQL is down"
+          description: "MySQL instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighMySQLConnections
+        expr: mysql_global_status_threads_connected{job="mysql-exporter"} / mysql_global_variables_max_connections{job="mysql-exporter"} > 0.8
+        for: 2m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "High MySQL connections"
+          description: "MySQL connections are at {{ $value }}% of max connections"
+
+      - alert: MySQLSlowQueries
+        expr: rate(mysql_global_status_slow_queries{job="mysql-exporter"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "High number of slow queries"
+          description: "MySQL slow query rate is {{ $value }} queries/second"
+
+      - alert: MySQLReplicationLag
+        expr: mysql_slave_status_seconds_behind_master{job="mysql-exporter"} > 30
+        for: 2m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "MySQL replication lag"
+          description: "MySQL replication lag is {{ $value }} seconds"
+
+      # Redis alerts
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighRedisMemoryUsage
+        expr: redis_memory_used_bytes{job="redis-exporter"} / redis_memory_max_bytes{job="redis-exporter"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is at {{ $value }}%"
+
+      - alert: RedisHighEvictedKeys
+        expr: rate(redis_evicted_keys_total{job="redis-exporter"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis key eviction rate"
+          description: "Redis is evicting {{ $value }} keys/second"
+
+      - alert: RedisLowCacheHitRate
+        expr: redis_keyspace_hits_total{job="redis-exporter"} / (redis_keyspace_hits_total{job="redis-exporter"} + redis_keyspace_misses_total{job="redis-exporter"}) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Low Redis cache hit rate"
+          description: "Redis cache hit rate is {{ $value }}%"
+
+      # External service alerts
+      - alert: ExternalServiceADown
+        expr: probe_success{job="blackbox-external-services", instance="http://external-service-a:8081/health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: external-service-a
+        annotations:
+          summary: "External Service A is down"
+          description: "External Service A health check failed for 2 minutes"
+
+      - alert: ExternalServiceBDown
+        expr: probe_success{job="blackbox-external-services", instance="http://external-service-b:8082/health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: external-service-b
+        annotations:
+          summary: "External Service B is down"
+          description: "External Service B health check failed for 2 minutes"
+
+      - alert: ExternalServiceHighLatency
+        expr: probe_duration_seconds{job="blackbox-external-services"} > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "External service high latency"
+          description: "External service latency is {{ $value }} seconds"
+
+      # Queue alerts
+      - alert: HighQueueBacklog
+        expr: redis_stream_length{job="redis-exporter", stream="position_updates"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: queue
+        annotations:
+          summary: "High queue backlog"
+          description: "Queue backlog is {{ $value }} messages"
+
+      - alert: QueueWorkerDown
+        expr: up{job="queue-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: queue-worker
+        annotations:
+          summary: "Queue worker is down"
+          description: "Queue worker instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighQueueProcessingTime
+        expr: rate(queue_processing_time_seconds_sum{job="queue-worker"}[5m]) / rate(queue_processing_time_seconds_count{job="queue-worker"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: queue-worker
+        annotations:
+          summary: "High queue processing time"
+          description: "Average queue processing time is {{ $value }} seconds"
+
+      # System resource alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes{fstype!~"tmpfs|ramfs"} - node_filesystem_free_bytes{fstype!~"tmpfs|ramfs"}) / node_filesystem_size_bytes{fstype!~"tmpfs|ramfs"} * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }} mount {{ $labels.mountpoint }}"
+
+      - alert: DiskPredictedToFill
+        expr: predict_linear(node_filesystem_free_bytes{fstype!~"tmpfs|ramfs"}[6h], 24*3600) < 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk predicted to fill within 24 hours"
+          description: "Based on current usage, disk on {{ $labels.instance }} mount {{ $labels.mountpoint }} will fill within 24 hours"
+
+      # Business metrics alerts
+      - alert: LowAssetQuerySuccessRate
+        expr: rate(asset_query_success_total{job="defi-api-gateway"}[10m]) / rate(asset_query_total{job="defi-api-gateway"}[10m]) < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "Low asset query success rate"
+          description: "Asset query success rate is {{ $value }}%"
+
+      - alert: LowPositionQuerySuccessRate
+        expr: rate(position_query_success_total{job="defi-api-gateway"}[10m]) / rate(position_query_total{job="defi-api-gateway"}[10m]) < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "Low position query success rate"
+          description: "Position query success rate is {{ $value }}%"
+
+      - alert: HighCacheMissRate
+        expr: rate(cache_miss_total{job="defi-api-gateway"}[10m]) / rate(cache_request_total{job="defi-api-gateway"}[10m]) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High cache miss rate"
+          description: "Cache miss rate is {{ $value }}%"
+
+      - alert: ExternalServiceTimeoutRate
+        expr: rate(external_service_timeout_total{job="defi-api-gateway"}[10m]) / rate(external_service_request_total{job="defi-api-gateway"}[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High external service timeout rate"
+          description: "External service timeout rate is {{ $value }}%"
